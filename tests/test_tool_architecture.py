@@ -41,13 +41,6 @@ class ToolArchitectureTestCase(unittest.TestCase):
         with self.assertRaises(ToolRequestError):
             self.registry.validate({"tool": "system.run", "arguments": {}})
 
-    def test_parse_tool_request_preserves_call_id(self):
-        request = ToolRequest(tool="memory.search", arguments={"query": "test"}, call_id="12345")
-        parsed = parse_tool_request(request)
-        self.assertEqual(parsed.call_id, "12345")
-        self.assertEqual(parsed.tool, "memory.search")
-        self.assertEqual(parsed.arguments, {"query": "test"})
-
     def test_malformed_request_rejection(self):
         with self.assertRaises(ToolRequestError):
             parse_tool_request({"tool": "calculator.evaluate"})

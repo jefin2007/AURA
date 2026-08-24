@@ -63,6 +63,19 @@ class GeminiAdapterTestCase(unittest.TestCase):
         self.assertEqual(response_part["id"], "call-1")
         self.assertEqual(response_part["response"], {"output": {"success": True, "result": {"result": 4}}})
 
+    def test_function_call_pending_contents_are_plain_dictionaries(self):
+        # We simulate the _value function retrieving an object when asked for "content", which we will bypass
+        # to ensure plain dictionary construction in _model_content.
+        client = FakeClient([
+            {"function_calls": [{"name": "calculator.evaluate", "args": {"expression": "2 + 2"}, "id": "call-1"}]},
+        ])
+        adapter = GeminiAdapter(client=client)
+        adapter.respond([{"role": "user", "content": "Calculate"}], TOOLS)
+        self.assertIsInstance(adapter._pending_contents[-1], dict)
+        self.assertIn("role", adapter._pending_contents[-1])
+        self.assertIn("parts", adapter._pending_contents[-1])
+        self.assertEqual(adapter._pending_contents[-1]["role"], "model")
+
     def test_malformed_function_call_is_rejected(self):
         adapter = GeminiAdapter(client=FakeClient([{"function_calls": [{"name": "calculator.evaluate", "args": "bad"}]}]))
         with self.assertRaises(GeminiUnavailableError):

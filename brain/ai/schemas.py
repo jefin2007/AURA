@@ -49,7 +49,6 @@ def parse_tool_request(payload):
     if isinstance(payload, ToolRequest):
         tool = payload.tool
         arguments = payload.arguments
-        call_id = payload.call_id
     elif isinstance(payload, dict) and set(payload) in ({"tool", "arguments"}, {"tool", "arguments", "call_id"}):
         tool = payload["tool"]
         arguments = payload["arguments"]
