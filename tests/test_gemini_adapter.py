@@ -84,6 +84,18 @@ class GeminiAdapterTestCase(unittest.TestCase):
         res = GeminiAdapter._model_content(MockResponse(), "tool", {}, "call-1")
         self.assertEqual(res, "SDK_CONTENT")
 
+    def test_model_content_preserves_sdk_response(self):
+        class MockCandidate:
+            def __init__(self):
+                self.content = "SDK_CONTENT"
+
+        class MockResponse:
+            def __init__(self):
+                self.candidates = [MockCandidate()]
+
+        res = GeminiAdapter._model_content(MockResponse(), "tool", {}, "call-1")
+        self.assertEqual(res, "SDK_CONTENT")
+
     def test_function_call_pending_contents_are_plain_dictionaries(self):
         # We simulate the _value function retrieving an object when asked for "content", which we will bypass
         # to ensure plain dictionary construction in _model_content.
