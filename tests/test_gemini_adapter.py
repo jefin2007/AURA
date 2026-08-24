@@ -69,6 +69,8 @@ class GeminiAdapterTestCase(unittest.TestCase):
         # In the fake test fallback code (dictionary path), id is inside function_response
         self.assertEqual(response_part["id"], "call-1")
         self.assertEqual(response_part["response"], {"output": {"success": True, "result": {"result": 4}}})
+        # Verify role is user in dictionary fallback
+        self.assertEqual(client.models.calls[1]["contents"][-1]["role"], "user")
 
     def test_model_content_preserves_sdk_response(self):
         class MockCandidate:
