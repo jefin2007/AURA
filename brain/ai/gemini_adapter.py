@@ -45,7 +45,12 @@ class GeminiAdapter:
             raise GeminiUnavailableError("AI brain is unavailable right now. Please try again later.")
         last_message = messages[-1]
         if last_message.get("role") == "user":
-            contents = list(self._history) + [{"role": "user", "parts": [{"text": last_message.get("content", "")}]}]
+            user_text = last_message.get("content", "")
+            if self._types is not None:
+                new_msg = self._types.Content(role="user", parts=[self._types.Part.from_text(text=user_text)])
+            else:
+                new_msg = {"role": "user", "parts": [{"text": user_text}]}
+            contents = list(self._history) + [new_msg]
         elif last_message.get("role") == "tool" and self._pending_contents is not None:
             contents = self._pending_contents + [self.tool_result_to_gemini(last_message["content"])]
         else:
@@ -71,7 +76,13 @@ class GeminiAdapter:
         text = self._response_text(response)
         if not text:
             raise GeminiUnavailableError("AI brain returned an invalid response.")
-        self._history = (contents + [{"role": "model", "parts": [{"text": text}]}])[-self.history_limit:]
+
+        if hasattr(response, "candidates") and response.candidates:
+            model_msg = response.candidates[0].content
+        else:
+            model_msg = {"role": "model", "parts": [{"text": text}]}
+
+        self._history = (contents + [model_msg])[-self.history_limit:]
         self._pending_contents = None
         return text
 
@@ -100,8 +111,7 @@ class GeminiAdapter:
             tools=[self._types.Tool(function_declarations=functions)],
         )
 
-    @staticmethod
-    def tool_result_to_gemini(tool_result):
+    def tool_result_to_gemini(self, tool_result):
         """Translate only serializable controlled results to a function response."""
         payload = {"success": bool(tool_result.get("success"))}
         if payload["success"]:
@@ -110,10 +120,19 @@ class GeminiAdapter:
         else:
             payload["error"] = tool_result.get("error", "Tool request failed.")
             response = {"error": payload}
+
+        if self._types is not None:
+            function_response_part = self._types.Part.from_function_response(
+                name=tool_result.get("tool") or "unknown",
+                response=response,
+                id=tool_result.get("call_id")
+            )
+            return self._types.Content(role="user", parts=[function_response_part])
+
         part = {"function_response": {"name": tool_result.get("tool") or "unknown", "response": response}}
         if tool_result.get("call_id"):
             part["function_response"]["id"] = tool_result["call_id"]
-        return {"role": "tool", "parts": [part]}
+        return {"role": "user", "parts": [part]}
 
     @staticmethod
     def _function_call(response):
@@ -141,6 +160,9 @@ class GeminiAdapter:
 
     @staticmethod
     def _model_content(response, name, arguments, call_id):
+        if hasattr(response, "candidates") and response.candidates:
+            return response.candidates[0].content
+
         call = {"name": name, "args": arguments}
         if call_id:
             call["id"] = call_id
