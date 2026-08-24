@@ -4,6 +4,7 @@ import os
 import unittest
 from unittest.mock import patch
 
+from brain.ai.schemas import ToolRequest, parse_tool_request
 from brain.ai.gemini_adapter import GEMINI_MODEL, GeminiAdapter, GeminiUnavailableError
 from brain.ai.orchestrator import run
 from brain.ai.tool_registry import build_default_registry
@@ -32,6 +33,11 @@ TOOLS = [{"name": "calculator.evaluate", "description": "Calculate.", "parameter
 
 
 class GeminiAdapterTestCase(unittest.TestCase):
+    def test_parse_tool_request_preserves_call_id(self):
+        req = ToolRequest(tool="test.tool", arguments={"a": 1}, call_id="call-abc")
+        parsed = parse_tool_request(req)
+        self.assertEqual(parsed.call_id, "call-abc")
+
     def test_missing_key_does_not_initialize(self):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(GeminiUnavailableError):
@@ -62,6 +68,20 @@ class GeminiAdapterTestCase(unittest.TestCase):
         response_part = client.models.calls[1]["contents"][-1]["parts"][0]["function_response"]
         self.assertEqual(response_part["id"], "call-1")
         self.assertEqual(response_part["response"], {"output": {"success": True, "result": {"result": 4}}})
+        # Verify role is user in dictionary fallback
+        self.assertEqual(client.models.calls[1]["contents"][-1]["role"], "user")
+
+    def test_model_content_preserves_sdk_response(self):
+        class MockCandidate:
+            def __init__(self):
+                self.content = "SDK_CONTENT"
+
+        class MockResponse:
+            def __init__(self):
+                self.candidates = [MockCandidate()]
+
+        res = GeminiAdapter._model_content(MockResponse(), "tool", {}, "call-1")
+        self.assertEqual(res, "SDK_CONTENT")
 
     def test_function_call_pending_contents_are_plain_dictionaries(self):
         # We simulate the _value function retrieving an object when asked for "content", which we will bypass
@@ -100,6 +120,12 @@ class GeminiAdapterTestCase(unittest.TestCase):
 
 @unittest.skipUnless(os.getenv("AURA_LIVE_GEMINI_TEST") == "1", "Set AURA_LIVE_GEMINI_TEST=1 to run live Gemini test.")
 class LiveGeminiIntegrationTestCase(unittest.TestCase):
+    def test_live_tool_calling_integration(self):
+        adapter = GeminiAdapter()
+        registry = build_default_registry()
+        result = run("What is 12345 + 54321? Use the calculator tool.", adapter, registry)
+        self.assertIn("66666", result.get("response", ""))
+
     def test_live_text_response(self):
         adapter = GeminiAdapter()
         response = adapter.respond([{"role": "user", "content": "Reply with hello."}], [])
