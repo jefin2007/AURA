@@ -141,9 +141,6 @@ class GeminiAdapter:
 
     @staticmethod
     def _model_content(response, name, arguments, call_id):
-        candidates = _value(response, "candidates") or []
-        if candidates and _value(candidates[0], "content") is not None:
-            return _value(candidates[0], "content")
         call = {"name": name, "args": arguments}
         if call_id:
             call["id"] = call_id
